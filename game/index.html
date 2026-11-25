@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chef Rush — Order Up!</title>
+<style>
+  :root{
+    --wood:#8a5a2b; --wood-dark:#6d441f; --cream:#fff6e6; --ink:#3b2a18;
+    --accent:#ff8c3b; --green:#4fbf67; --red:#e5484d; --gold:#ffc53d;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; user-select:none;}
+  html,body{height:100%;}
+  body{
+    font-family:'Trebuchet MS','Segoe UI',sans-serif; color:var(--ink);
+    background:linear-gradient(180deg,#2b1c10 0%,#3c2a18 100%);
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  #stage{
+    width:min(920px,100vw); height:min(680px,100vh); position:relative;
+    background:
+      radial-gradient(1200px 500px at 50% -200px,#ffd9a0 0%,transparent 60%),
+      linear-gradient(180deg,#f9e7c8 0%,#f4d8a8 62%,var(--wood) 62%,var(--wood-dark) 100%);
+    border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.6);
+    overflow:hidden;
+  }
+  /* ---------- HUD ---------- */
+  #hud{position:absolute; top:0; left:0; right:0; display:flex; gap:12px; align-items:center;
+       padding:10px 16px; font-weight:bold; z-index:5;}
+  .hud-chip{transition:transform .15s;background:rgba(255,255,255,.85); border-radius:999px; padding:6px 14px;
+       box-shadow:0 2px 0 rgba(0,0,0,.15); font-size:15px; white-space:nowrap;}
+  #comboChip{color:#c96a00;}
+  #muteBtn{margin-left:auto; cursor:pointer; background:rgba(255,255,255,.85); border:none;
+       border-radius:999px; padding:6px 12px; font-size:15px;}
+  /* ---------- Customers ---------- */
+  #customers{position:absolute; top:52px; left:0; right:0; display:flex;
+       justify-content:space-evenly; align-items:flex-start; height:240px; z-index:4;}
+  .seat{width:29%; display:flex; flex-direction:column; align-items:center; opacity:0;}
+  .seat.enter{animation:slidein .45s ease-out forwards;}
+  @keyframes slidein{from{transform:translateY(-90px) scale(.7); opacity:0;}
+                     to{transform:translateY(0) scale(1); opacity:1;}}
+  .seat.leaving{animation:slideout .5s ease-in forwards;}
+  @keyframes slideout{to{transform:translateY(120px) rotate(12deg); opacity:0;}}
+  .face{font-size:52px; line-height:1; filter:drop-shadow(0 6px 4px rgba(0,0,0,.25));}
+  .face.mood-ok{animation:bob 2.2s ease-in-out infinite;}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .face.mood-impatient{animation:wobble .6s ease-in-out infinite;}
+  @keyframes wobble{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
+  .face.mood-angry{transform:scale(1.1);}
+  .ticket{background:var(--cream); border-radius:12px; padding:8px 12px; margin-top:6px;
+       box-shadow:0 4px 0 rgba(0,0,0,.18); border-bottom:3px dashed #d9b98a; min-width:150px; text-align:center;}
+  .ticket .name{font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#8a6a44;}
+  .ticket .recipe{font-size:26px; letter-spacing:4px; margin-top:2px;}
+  .ticket .recipe .done{opacity:.25; text-decoration:line-through;}
+  .ticket .recipe .next{outline:2px solid var(--accent); outline-offset:3px; border-radius:6px;}
+  .patience{width:100%; height:10px; margin-top:8px; background:rgba(0,0,0,.15); border-radius:99px; overflow:hidden;}
+  .patience i{display:block; height:100%; background:var(--green); border-radius:99px;}
+  /* ---------- Counter / plate ---------- */
+  #counter{position:absolute; bottom:170px; left:0; right:0; text-align:center; z-index:4;}
+  #plate{display:inline-flex; gap:6px; align-items:center; justify-content:center;
+       background:rgba(255,255,255,.7); border-radius:999px; padding:8px 18px; min-height:52px;
+       min-width:220px; box-shadow:0 6px 0 rgba(0,0,0,.25); border:3px solid #fff;}
+  #plate span{font-size:30px; animation:pop .18s ease-out;}
+  @keyframes pop{from{transform:scale(.3)}to{transform:scale(1)}}
+  #plate.shake{animation:shake .3s;}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+  /* ---------- Stations ---------- */
+  #stations{position:absolute; bottom:18px; left:0; right:0; display:flex;
+       justify-content:center; gap:10px; z-index:6; padding:0 12px; flex-wrap:wrap;}
+  .station{background:linear-gradient(180deg,#fff 0%,#ffe9c9 100%); border:none; cursor:pointer;
+       border-radius:16px; padding:10px 14px; text-align:center; min-width:86px;
+       box-shadow:0 5px 0 #b98a55, 0 8px 14px rgba(0,0,0,.3); font:inherit; font-weight:bold; color:var(--ink);}
+  .station:active{transform:translateY(3px); box-shadow:0 2px 0 #b98a55;}
+  .station .icon{font-size:32px; display:block;}
+  .station .label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#8a6a44;}
+  .station.locked{filter:grayscale(1); opacity:.45; cursor:not-allowed;}
+  #panWrap{position:relative;}
+  #panBar{height:8px; width:70px; margin:4px auto 0; background:rgba(0,0,0,.15); border-radius:99px; overflow:hidden; position:relative;}
+  #panBar i{display:block; height:100%; width:0%; background:var(--red);}
+  #panBar .zone{position:absolute; top:0; bottom:0; background:rgba(79,191,103,.55);}
+  #readyPatties{font-size:13px; color:#c96a00;}
+  #serveBtn{background:linear-gradient(180deg,var(--green),#2f9e4c); color:#fff;}
+  #serveBtn:active{box-shadow:0 2px 0 #237a3a;}
+  #trashBtn{background:linear-gradient(180deg,#ff9d9d,#e5484d); color:#fff;}
+  /* ---------- Floaties / banners ---------- */
+  .floaty{position:absolute; font-weight:bold; font-size:26px; z-index:9; pointer-events:none;
+       animation:floaty 1s ease-out forwards; text-shadow:0 2px 0 rgba(0,0,0,.2);}
+  @keyframes floaty{from{opacity:1; transform:translateY(0)}to{opacity:0; transform:translateY(-70px)}}
+  #banner{position:absolute; left:50%; top:38%; transform:translate(-50%,-50%) scale(0); z-index:10;
+       font-size:44px; font-weight:bold; color:#fff; text-shadow:0 4px 0 rgba(0,0,0,.35);
+       background:linear-gradient(180deg,var(--accent),#e56a00); padding:14px 36px; border-radius:18px;
+       box-shadow:0 10px 24px rgba(0,0,0,.4); transition:transform .25s cubic-bezier(.5,1.8,.5,1); white-space:nowrap;}
+  #banner.show{transform:translate(-50%,-50%) scale(1);}
+  /* ---------- Overlays ---------- */
+  .overlay{position:absolute; inset:0; background:rgba(30,18,8,.82); z-index:20; color:#fff;
+       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+       text-align:center; padding:30px;}
+  .overlay.hidden{display:none;}
+  .overlay h1{font-size:54px; letter-spacing:.04em; text-shadow:0 5px 0 rgba(0,0,0,.4);}
+  .overlay h1 em{color:var(--gold); font-style:normal;}
+  .overlay p{max-width:560px; line-height:1.5; font-size:16px; color:#ffe9c9;}
+  .bigbtn{font:inherit; font-size:22px; font-weight:bold; padding:14px 46px; border:none; cursor:pointer;
+       border-radius:999px; background:linear-gradient(180deg,var(--accent),#e56a00); color:#fff;
+       box-shadow:0 6px 0 #a34e00, 0 10px 20px rgba(0,0,0,.4); letter-spacing:.05em;}
+  .bigbtn:active{transform:translateY(4px); box-shadow:0 2px 0 #a34e00;}
+  .overlay .stats{font-size:20px;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; justify-content:center; font-size:14px; color:#ffe9c9;}
+  .legend b{font-size:20px;}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+  #footer{position:absolute; bottom:2px; right:8px; font-size:10px; color:rgba(255,255,255,.55); z-index:3;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="hud">
+    <div class="hud-chip" id="scoreChip">⭐ 0</div>
+    <div class="hud-chip" id="comboChip">combo ×1</div>
+    <div class="hud-chip" id="levelChip">level 1</div>
+    <div class="hud-chip" id="livesChip">❤❤❤</div>
+    <button id="muteBtn" title="toggle sound">🔊</button>
+  </div>
+
+  <div id="customers"></div>
+
+  <div id="counter"><div id="plate"></div></div>
+
+  <div id="stations">
+    <button class="station ing" data-ing="bun"><span class="icon">🍞</span><span class="label">Bun</span></button>
+    <button class="station ing" data-ing="patty" id="pattyBtn"><span class="icon">🥩</span><span class="label">Patty</span><span id="readyPatties"></span></button>
+    <div class="station" id="panWrap" title="Click to take the patty out when the bar is green">
+      <span class="icon">🍳</span><span class="label">Pan — catch the green!</span>
+      <div id="panBar"><span class="zone"></span><i id="panFill"></i></div>
+    </div>
+    <button class="station ing" data-ing="cheese"><span class="icon">🧀</span><span class="label">Cheese</span></button>
+    <button class="station ing" data-ing="lettuce"><span class="icon">🥬</span><span class="label">Lettuce</span></button>
+    <button class="station ing" data-ing="tomato"><span class="icon">🍅</span><span class="label">Tomato</span></button>
+    <button class="station" id="serveBtn"><span class="icon">🛎️</span><span class="label">Serve!</span></button>
+    <button class="station" id="trashBtn"><span class="icon">🗑️</span><span class="label">Trash</span></button>
+  </div>
+
+  <div id="banner"></div>
+  <div id="footer">Chef Rush — a make.fun entry</div>
+
+  <div class="overlay" id="titleScreen">
+    <h1>👨‍🍳 CHEF <em>RUSH</em></h1>
+    <p>Customers are lining up! Read the ticket, build each order in the exact
+       order shown, and ring the bell before patience runs out.<br><br>
+       🥩 patties must be pan-fried — click the <b>pan</b> while the bar is in the
+       green zone. Too early = raw, too late = burnt!</p>
+    <div class="legend"><span><b>🍞</b> bun</span><span><b>🥩</b> cooked patty</span>
+      <span><b>🧀</b> cheese</span><span><b>🥬</b> lettuce</span><span><b>🍅</b> tomato</span></div>
+    <div class="stats" id="bestLine"></div>
+    <button class="bigbtn" id="startBtn">START COOKING</button>
+  </div>
+
+  <div class="overlay hidden" id="overScreen">
+    <h1>💥 KITCHEN <em>CLOSED</em></h1>
+    <div class="stats" id="finalStats"></div>
+    <p id="overQuip"></p>
+    <button class="bigbtn" id="againBtn">COOK AGAIN</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ============================ data ============================
+const ING = { bun:'🍞', patty:'🥩', cheese:'🧀', lettuce:'🥬', tomato:'🍅' };
+const RECIPES = {
+  burger:       { name:'Classic Burger',  seq:['bun','patty','lettuce','tomato'] },
+  cheeseburger: { name:'Cheeseburger',    seq:['bun','patty','cheese','tomato'] },
+  salad:        { name:'Garden Salad',    seq:['lettuce','tomato','cheese','lettuce'] },
+  double:       { name:'Double Cheese',   seq:['bun','patty','cheese','patty','cheese'] },
+  deluxe:       { name:'Deluxe Stack',    seq:['bun','patty','lettuce','cheese','tomato','bun'] },
+};
+const L1_POOL = ['burger','cheeseburger'];
+const LATER_POOL = ['burger','cheeseburger','salad','double','deluxe'];
+const FACES_OK = ['🧑','👩','🧔','👴','👵','👱','🧓'];
+const FACES_IMP = ['😤','😠'];
+const FACES_ANGRY = ['😡','🤬'];
+const FACES_HAPPY = ['😄','🤩','😍'];
+const PAN_MIN = 0.9, PAN_MAX = 1.4, PAN_BURNT = 1.8;
+
+// ============================ state ============================
+let S = null;
+function freshState(){
+  return {
+    running:false, over:false, muted:false,
+    score:0, combo:1, served:0, level:1, lives:3,
+    customers:[],       // {el,recipe,progress,patience,maxPatience,faceEl,barEl,leaveTimer,impatient}
+    plate:[],           // ingredients currently on the plate
+    readyPatties:0,
+    pan:{ cooking:false, t:0, burnt:false },
+    nextSpawnAt:0, lastTick:0, elapsed:0,
+    best:+(localStorage.getItem('chefrush.best')||0),
+  };
+}
+
+// ============================ dom ============================
+const $ = id => document.getElementById(id);
+const customersEl=$('customers'), plateEl=$('plate'), bannerEl=$('banner');
+const panFill=$('panFill'), panZone=document.querySelector('#panBar .zone'), panWrap=$('panWrap');
+const pattyBtn=$('pattyBtn'), readyPattiesEl=$('readyPatties');
+const hud={score:$('scoreChip'),combo:$('comboChip'),level:$('levelChip'),lives:$('livesChip')};
+
+// ============================ audio ============================
+let AC=null;
+function ac(){ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); return AC; }
+function beep(freq,dur,type,vol,when){
+  if(S && S.muted) return;
+  const c=ac(), o=c.createOscillator(), g=c.createGain(), t=c.currentTime+(when||0);
+  o.type=type||'sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(vol||.15,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t+dur+.02);
+}
+function sfxServe(){ beep(660,.12,'triangle',.2); beep(880,.14,'triangle',.2,.09); beep(1320,.2,'triangle',.18,.18); }
+function sfxFail(){ beep(220,.18,'sawtooth',.14); beep(160,.25,'sawtooth',.12,.1); }
+function sfxClick(){ beep(500,.05,'square',.06); }
+function sfxPerfect(){ beep(880,.08,'square',.1); beep(1760,.12,'square',.1,.06); }
+function sfxLose(){ beep(300,.3,'triangle',.2); beep(240,.35,'triangle',.2,.2); beep(180,.5,'triangle',.22,.4); }
+function sfxSizzle(){ beep(90,.08,'sawtooth',.03); }
+
+// ============================ helpers ============================
+function showBanner(text,color){
+  bannerEl.textContent=text;
+  bannerEl.style.background=color||'linear-gradient(180deg,var(--accent),#e56a00)';
+  bannerEl.classList.add('show');
+  clearTimeout(bannerEl._t);
+  bannerEl._t=setTimeout(()=>bannerEl.classList.remove('show'),900);
+}
+function floaty(el,text,color){
+  const r=el.getBoundingClientRect(), st=$('stage').getBoundingClientRect();
+  const f=document.createElement('div'); f.className='floaty'; f.textContent=text;
+  f.style.color=color||'#fff';
+  f.style.left=(r.left-st.left+r.width/2-30)+'px';
+  f.style.top=(r.top-st.top)+'px';
+  $('stage').appendChild(f); setTimeout(()=>f.remove(),1000);
+}
+function addScore(n){ S.score+=n; hud.score.textContent='⭐ '+S.score; }
+function pushCombo(){
+  const leveled=S.combo===5;
+  S.combo=Math.min(S.combo+1,5); hud.combo.textContent='combo ×'+S.combo;
+  hud.combo.style.transform='scale(1.25)';
+  setTimeout(()=>hud.combo.style.transform='',180);
+  if(leveled) floaty(hud.combo,'MAX COMBO!','#ffd34d');
+}
+function resetCombo(){ S.combo=1; hud.combo.textContent='combo ×1'; }
+function updateLives(){ hud.lives.textContent='❤'.repeat(S.lives)+'🖤'.repeat(3-S.lives); }
+function updateLevel(){ hud.level.textContent='level '+S.level; }
+function updatePattyUi(){
+  readyPattiesEl.textContent = S.readyPatties?('×'+S.readyPatties):'';
+  pattyBtn.classList.toggle('locked', S.readyPatties===0);
+}
+function currentRecipe(){ return S.customers.find(c=>c.progress < c.recipe.seq.length) || null; }
+
+// ============================ customers ============================
+function pickRecipe(){
+  const pool = S.level===1 ? L1_POOL : LATER_POOL;
+  return RECIPES[pool[Math.floor(Math.random()*pool.length)]];
+}
+function spawnCustomer(){
+  const seat=document.createElement('div'); seat.className='seat enter';
+  const recipe=pickRecipe();
+  const patience=Math.max(9, 20 - S.level*1.3) + recipe.seq.length*1.4;
+  seat.innerHTML =
+    '<div class="face mood-ok">'+FACES_OK[Math.floor(Math.random()*FACES_OK.length)]+'</div>'+
+    '<div class="ticket"><div class="name">'+recipe.name+'</div>'+
+    '<div class="recipe">'+recipe.seq.map(k=>'<span>'+ING[k]+'</span>').join('')+'</div></div>'+
+    '<div class="patience"><i style="width:100%"></i></div>';
+  customersEl.appendChild(seat);
+  const cust={ el:seat, recipe, progress:0, patience, maxPatience:patience,
+    faceEl:seat.querySelector('.face'), barEl:seat.querySelector('.patience i'), impatient:false };
+  S.customers.push(cust);
+}
+function customerLeaves(cust,happy){
+  const idx=S.customers.indexOf(cust); if(idx<0) return;
+  S.customers.splice(idx,1);
+  cust.el.classList.add('leaving');
+  setTimeout(()=>cust.el.remove(),520);
+  if(happy){
+    cust.faceEl.className='face mood-angry';
+    cust.faceEl.textContent=FACES_HAPPY[Math.floor(Math.random()*FACES_HAPPY.length)];
+  }
+}
+function loseCustomer(cust){
+  customerLeaves(cust,false);
+  S.lives--; updateLives(); resetCombo();
+  floaty(cust.el,'💔','#ff6b6b'); sfxLose();
+  showBanner('ORDER MISSED!','linear-gradient(180deg,#e5484d,#a52025)');
+  if(S.lives<=0) endGame();
+}
+function renderTicket(cust){
+  const r=cust.recipe;
+  cust.el.querySelector('.recipe').innerHTML =
+    r.seq.map((k,i)=>'<span class="'+(i<cust.progress?'done':(i===cust.progress?'next':''))+'">'+ING[k]+'</span>').join('');
+}
+function updateMood(cust){
+  const p=cust.patience/cust.maxPatience;
+  if(p<.25){ cust.faceEl.className='face mood-angry'; cust.faceEl.textContent=FACES_ANGRY[0]; }
+  else if(p<.55){ cust.faceEl.className='face mood-impatient';
+    cust.faceEl.textContent=FACES_IMP[cust.impatient?1:0]; cust.impatient=!cust.impatient; }
+  else if(!cust.faceEl.classList.contains('mood-ok')){
+    cust.faceEl.className='face mood-ok';
+    cust.faceEl.textContent=FACES_OK[Math.floor(Math.random()*FACES_OK.length)]; }
+}
+
+// ============================ plate ============================
+function renderPlate(){
+  plateEl.innerHTML=S.plate.map(k=>'<span>'+ING[k]+'</span>').join('');
+  const cust=S&&S.customers&&S.customers[0];
+  const ready=cust&&cust.progress>=cust.recipe.seq.length;
+  $('serveBtn').style.animation=ready?'pulse .8s ease-in-out infinite':'';
+}
+function clearPlate(){ S.plate=[]; renderPlate(); }
+
+function nextCustomer(){ return S.customers[0]||null; }
+
+function addIngredient(kind){
+  if(!S.running) return;
+  const cust=nextCustomer();
+  if(!cust) return;
+  const want=cust.recipe.seq[cust.progress];
+  if(kind==='patty'){
+    if(S.readyPatties<=0) return;               // locked anyway
+    if(want!=='patty'){ wrongClick(kind,cust); return; }
+    S.readyPatties--; updatePattyUi();
+  } else if(kind!==want){ wrongClick(kind,cust); return; }
+  S.plate.push(kind); renderPlate();
+  cust.progress++; renderTicket(cust); sfxClick();
+  floaty(plateEl, ING[kind], '#fff');
+  if(cust.progress>=cust.recipe.seq.length) serveCustomer(cust);
+}
+function wrongClick(kind,cust){
+  plateEl.classList.remove('shake'); void plateEl.offsetWidth; plateEl.classList.add('shake');
+  cust.patience=Math.max(1,cust.patience-1.2);
+  resetCombo(); sfxFail();
+  floaty(plateEl,'✖ wrong!','#ff8a8a');
+}
+function serveCustomer(cust){
+  const tipFrac=cust.patience/cust.maxPatience;
+  const tip=Math.round(tipFrac*40)*10;
+  const pts=(100+tip)*S.combo;
+  addScore(pts); pushCombo(); S.served++;
+  floaty(cust.el,'+'+pts,'#ffd34d'); sfxServe();
+  showBanner(tipFrac>.75 ? 'PERFECT! +'+pts : 'SERVED! +'+pts,
+             tipFrac>.75 ? 'linear-gradient(180deg,var(--gold),#d99e00)' : null);
+  customerLeaves(cust,true);
+  clearPlate();
+  if(S.served%4===0){ S.level++; updateLevel(); showBanner('LEVEL '+S.level+'! ⚡'); }
+}
+
+// ============================ pan ============================
+function startPan(){
+  if(!S.running || S.pan.cooking || S.pan.burnt) return;
+  S.pan.cooking=true; S.pan.t=0; sfxSizzle();
+}
+function collectPan(){
+  if(!S.running) return;
+  if(S.pan.burnt){ S.pan.burnt=false; renderPan(); return; }
+  if(!S.pan.cooking) return;
+  const t=S.pan.t;
+  if(t>=PAN_MIN && t<=PAN_MAX){
+    S.readyPatties=Math.min(S.readyPatties+1,3); updatePattyUi();
+    floaty(panWrap,'🥩 ready','#8fe3a1'); sfxPerfect();
+  } else if(t<PAN_MIN){
+    floaty(panWrap,'raw! 🤢','#ffd34d'); sfxFail();
+  } else {
+    floaty(panWrap,'burnt! 🔥','#ff8a8a'); sfxFail();
+    S.pan.burnt=true;
+  }
+  S.pan.cooking=false; renderPan();
+}
+function renderPan(){
+  panFill.style.width = S.pan.burnt ? '100%' : (Math.min(S.pan.t,PAN_BURNT)/PAN_BURNT*100)+'%';
+  panFill.style.background = S.pan.burnt ? '#552211'
+    : (S.pan.t>=PAN_MIN&&S.pan.t<=PAN_MAX ? 'var(--green)' : (S.pan.t<PAN_MIN?'#ff9db0':'#e5484d'));
+}
+
+// ============================ main loop ============================
+function tick(now){
+  if(!S.running) return;
+  const dt=Math.min((now-S.lastTick)/1000,.1); S.lastTick=now; S.elapsed+=dt;
+
+  // pan cooking
+  if(S.pan.cooking && !S.pan.burnt){
+    S.pan.t+=dt;
+    if(S.pan.t>=PAN_BURNT){ S.pan.cooking=false; S.pan.burnt=true; sfxFail();
+      floaty(panWrap,'burnt! 🔥','#ff8a8a'); }
+    renderPan();
+  }
+  // spawning
+  if(S.elapsed>=S.nextSpawnAt && S.customers.length<3){
+    spawnCustomer();
+    S.nextSpawnAt=S.elapsed+Math.max(2.5, 6.5-S.level*.5);
+  }
+  // patience
+  for(const c of S.customers.slice()){
+    c.patience-=dt*(1+S.level*.06);
+    c.barEl.style.width=Math.max(0,c.patience/c.maxPatience*100)+'%';
+    c.barEl.style.background=c.patience/c.maxPatience>.4?'var(--green)':'var(--red)';
+    updateMood(c);
+    if(c.patience<=0) loseCustomer(c);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ============================ game flow ============================
+function startGame(){
+  S=freshState();
+  customersEl.innerHTML=''; clearPlate();
+  updateLives(); updateLevel(); updatePattyUi(); renderPan();
+  hud.score.textContent='⭐ 0'; hud.combo.textContent='combo ×1';
+  $('titleScreen').classList.add('hidden'); $('overScreen').classList.add('hidden');
+  S.running=true; S.lastTick=performance.now(); S.nextSpawnAt=0;
+  requestAnimationFrame(tick);
+  showBanner('ORDER UP!');
+}
+function togglePause(){
+  if(!S||S.over) return;
+  if(S.running){
+    S.running=false;
+    bannerEl.textContent='PAUSED — press Esc'; bannerEl.classList.add('show');
+  } else {
+    bannerEl.classList.remove('show');
+    S.running=true; S.lastTick=performance.now(); requestAnimationFrame(tick);
+  }
+}
+function endGame(){
+  S.running=false; S.over=true;
+  clearPlate();
+  if(S.score>S.best){ S.best=S.score; localStorage.setItem('chefrush.best',S.best); }
+  $('finalStats').textContent='score '+S.score+'  ·  served '+S.served+'  ·  level '+S.level+'  ·  best '+S.best;
+  $('overQuip').textContent=
+    S.score>=1500?'The health inspector weeps with joy. 🏆':
+    S.score>=600?'Solid service — the lunch crowd will be back. 👏':
+    'Maybe try a food truck instead. 🚚';
+  $('overScreen').classList.remove('hidden');
+  showBest();
+}
+
+// ============================ wiring ============================
+document.querySelectorAll('.station.ing').forEach(btn=>{
+  btn.addEventListener('click',()=>addIngredient(btn.dataset.ing));
+});
+panWrap.addEventListener('click',()=>{ if(S&&S.pan.cooking) collectPan(); else startPan(); });
+pattyBtn.addEventListener('click',()=>{ if(S&&S.readyPatties===0) startPan(); });
+$('serveBtn').addEventListener('click',()=>{
+  if(!S||!S.running) return;
+  const cust=nextCustomer();
+  if(!cust) return;
+  if(cust.progress>=cust.recipe.seq.length) serveCustomer(cust);
+  else { wrongClick('(early)',cust); }
+});
+$('trashBtn').addEventListener('click',()=>{ if(S&&S.running&&S.plate.length){ clearPlate(); sfxClick(); floaty($('trashBtn'),'🗑️','#ccc'); }});
+$('muteBtn').addEventListener('click',()=>{ S.muted=!S.muted; $('muteBtn').textContent=S.muted?'🔇':'🔊'; });
+function showBest(){ $('bestLine').textContent='personal best: '+(S?S.best:+(localStorage.getItem('chefrush.best')||0))+' ⭐'; }
+showBest();
+$('startBtn').addEventListener('click',startGame);
+$('againBtn').addEventListener('click',startGame);
+document.addEventListener('keydown',e=>{
+  if(e.key==='1'||e.key.toLowerCase()==='b') addIngredient('bun');
+  else if(e.key==='2'||e.key.toLowerCase()==='p') addIngredient('patty');
+  else if(e.key==='3'||e.key.toLowerCase()==='c') addIngredient('cheese');
+  else if(e.key==='4'||e.key.toLowerCase()==='l') addIngredient('lettuce');
+  else if(e.key==='5'||e.key.toLowerCase()==='t') addIngredient('tomato');
+  else if(e.key===' '){ e.preventDefault(); if(S&&S.pan.cooking) collectPan(); else if(S) startPan(); }
+  else if(e.key==='Enter'){ if(!S||S.over) startGame(); }
+  else if(e.key==='Escape'){ togglePause(); }
+});
+updateLives(); updateLevel();
+</script>
+</body>
+</html>
