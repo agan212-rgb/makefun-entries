@@ -1,0 +1,74 @@
+<!doctype html><html><title>Chef Rush</title><style>
+*{margin:0;box-sizing:border-box}body{font:14px monospace;background:#1b2430;color:#eee;height:100vh;display:flex;flex-direction:column;}
+header{display:flex;gap:10px;justify-content:space-between;padding:8px;background:#101820}
+button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:6px 10px;background:#2b9e5f;color:#fff}
+button:disabled{opacity:.4;cursor:default}main{flex:1;display:flex;gap:12px;padding:12px;}
+#kitchen{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:start}
+.st{background:#25344a;border-radius:12px;padding:8px;min-height:90px;display:flex;flex-direction:column;gap:5px}
+h3{color:#8fd}.state{font-size:12px;color:#fca}.bar{height:6px;background:#0b1018}.bar i{display:block;height:100%;background:#e5a13c}
+#side{width:290px;display:flex;flex-direction:column;gap:8px}
+#orders{flex:1;overflow:auto}.ord{background:#2a2f45;border-radius:10px;padding:6px 8px;margin-bottom:6px;font-size:13px}
+.d{color:#f6c;font-weight:bold}.tip{color:#9be;font-size:12px}#log{height:100px;overflow:auto;background:#101820;border-radius:10px;padding:6px;font-size:11px;color:#9aa}
+#ing{display:flex;flex-wrap:wrap;gap:5px}
+.ing{padding:5px 8px;background:#3a4a6b;border-radius:8px}.ing.on{outline:2px solid #2b9e5f}
+</style></head><body>
+<header><b>CHEF RUSH</b><span id="money">$0</span><span id="rep">Rep 0</span><span id="day">Day 1</span><span id="clock">00:00</span><button id="start">Start Day</button></header>
+<main>
+ <section id="kitchen"></section>
+ <aside id="side">
+  <div><b>Market</b><div id="ing"></div></div>
+  <div><b>Orders</b><div id="orders">Wait for the day to start.</div></div>
+  <div id="log"></div>
+ </aside>
+</main>
+<script>
+const ING={rice:2,noodle:3,egg:2,beef:6,shrimp:7,cheese:4,veg:3,bun:3,fish:5,spice:2};
+const DISH=[
+ {name:'Fried Rice',req:{rice:1,egg:1},time:4000,price:14,garn:'spice'},
+ {name:'Noodle Bowl',req:{noodle:1,veg:1},time:4000,price:15,garn:'spice'},
+ {name:'Omelette',req:{egg:2,cheese:1},time:3500,price:13,garn:'veg'},
+ {name:'Burger',req:{bun:1,beef:1,cheese:1},time:5000,price:22,garn:'veg'},
+ {name:'Shrimp Pasta',req:{noodle:1,shrimp:1},time:6000,price:28,garn:'veg'},
+ {name:'Fish & Chips',req:{fish:1,bun:1},time:5000,price:24,garn:'spice'}];
+const STN=[['Grill',['beef','fish','shrimp']],['Wok',['rice','noodle']],['Pan',['egg','veg']]];
+let st={money:40,rep:0,day:1,stock:{},pan:0,sel:null,run:false,t0:0,dur:90000,orders:[],cooked:[]};
+let rngS=123456789;const rnd=()=>{rngS^=rngS<<13;rngS^=rngS>>>17;rngS^=rngS<<5;return(rngS>>>0)/4294967296};
+const $=id=>document.getElementById(id);const log=t=>{const d=document.createElement('div');d.textContent=t;$('log').prepend(d)};
+function render(){
+ $('money').textContent='$'+st.money;$('rep').textContent='Reputation: '+st.rep;$('day').textContent='Day '+st.day;
+ $('ing').innerHTML=Object.keys(ING).map(k=>`<button class="ing${st.sel==k?' on':''}" data-k="${k}">${k} $${ING[k]} x${st.stock[k]||0}</button>`).join('');
+ [...$('ing').children].forEach(b=>b.onclick=()=>{st.sel=b.dataset.k;render()});
+ $('orders').innerHTML=st.orders.length?st.orders.map(o=>`<div class="ord"><b>${o.d.name}</b> ${Object.keys(o.d.req).map(k=>k+' x'+o.d.req[k]).join(', ')||''}<div class="d">patience ${Math.max(0,Math.round(o.pat/1000))}s &middot; $${o.d.price}</div></div>`).join(''):'<div class="tip">No open orders.</div>';
+ $('kitchen').innerHTML=STN.map((s,i)=>`<div class="st"><h3>${s[0]}</h3>${st.stock[s[1][0]]?'<div class="tip">loaded: '+s[1].filter(k=>st.stock[k]).join(', ')+'</div>':''}<div class="state">${st.pan&&st.pan.st==i?'cooking '+st.pan.n+' ('+Math.max(0,Math.round((st.pan.end-Date.now())/1000))+'s)':(st.run?'load a dish':'closed')}</div><div class="bar"><i style="width:${st.pan&&st.pan.st==i?Math.max(0,100*(1-(st.pan.end-Date.now())/st.pan.d.t)):0}%"></i></div>${DISH.map((d,j)=>s[1].some(k=>d.req[k])?`<button data-cook="${j}" data-st="${i}" ${(!st.run||st.pan&&st.pan.st==i||!Object.keys(d.req).every(k=>(st.stock[k]||0)>=d.req[k]))?'disabled':''}>${d.name}</button>`:'').join('')}${st.pan&&st.pan.st==i?`<button data-serve="${i}">Serve (+garnish)</button>`:''}</div>`).join('');
+ document.querySelectorAll('[data-cook]').forEach(b=>b.onclick=()=>cook(+b.dataset.cook,+b.dataset.st));
+ document.querySelectorAll('[data-serve]').forEach(b=>b.onclick=()=>serve(+b.dataset.serve));
+}
+function cook(j,i){const d=DISH[j];for(const k in d.req)st.stock[k]-=d.req[k];st.pan={st:i,d:near(d),end:Date.now()+d.time,n:d.name};log('Cooking '+d.name);render()}
+function near(d){const o=st.orders.find(o=>o.d.name==d.name);return o?o.d:d}
+function serve(i){if(!st.pan||st.pan.st!=i)return;const p=st.pan,d=p.d;
+ if(Date.now()<p.end){log(d.name+' is still cooking!');return}
+ const o=st.orders.findIndex(o=>o.d.name==d.name&&o.pat>0);
+ const garn=st.stock[d.garn]?d.garn:null;
+ if(o<0){st.money+=Math.round(d.price*.4);st.rep=Math.max(0,st.rep-1);log('No order wanted '+d.name+'. Sold cheap (-rep).')}
+ else{let pay=d.price;st.orders.splice(o,1);if(garn){st.stock[d.garn]--;pay+=6;st.rep++;log('Served '+d.name+' with '+garn+'. Tip!')}else log('Served '+d.name+'.');st.money+=pay;st.pan=0}
+ render()}
+function tick(){
+ if(st.run){
+  if(Math.random&&0){} // seeded rng only used for order gen
+  st.orders.forEach(o=>o.pat-=100);
+  const before=st.orders.length;
+  st.orders=st.orders.filter(o=>{if(o.pat<=0){st.rep=Math.max(0,st.rep-2);log('Order '+o.d.name+' walked out!');return false}return true});
+  const el=Date.now()-st.t0;
+  $('clock').textContent=String(Math.floor(el/60000)).padStart(2,'0')+':'+String(Math.floor(el/1000)%60).padStart(2,'0');
+  if(el<st.dur&&st.orders.length<3&&rnd()<.012){const d=DISH[Math.floor(rnd()*DISH.length)];st.orders.push({d,pat:20000+st.rep*1000});log('New order: '+d.name)}
+  if(el>=st.dur){endDay()}
+  render();
+ }
+ requestAnimationFrame(tick);
+}
+function startDay(){if(st.run)return;st.run=true;st.t0=Date.now();rngS=123456789+st.day*7919;$('start').textContent='End Day';log('Day '+st.day+'. Buy ingredients!');render()}
+function endDay(){st.run=false;$('start').textContent='Start Day '+(st.day+1);log('Day '+st.day+' over. Cash $'+st.money+'.');st.day++;render()}
+$('start').onclick=()=>st.run?endDay():startDay();
+log('Tip: right garnish = +$6 and reputation.');
+render();requestAnimationFrame(tick);
+</script></body></html>
